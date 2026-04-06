@@ -73,9 +73,21 @@ declare module "@ff-labs/fff-node" {
     destroy(): void;
   }
 
+  export interface HealthCheckResult {
+    filePicker: { initialized: boolean };
+    frecency: { initialized: boolean };
+    git: {
+      available: boolean;
+      libgit2Version: string;
+      repositoryFound: boolean;
+      workdir?: string;
+    };
+    queryTracker: { initialized: boolean };
+    version: string;
+  }
+
   export const FileFinder: {
     create(options: FileFinderOptions): Result<FileFinder>;
+    healthCheckStatic(): Result<HealthCheckResult>;
   };
-
-  export function getVersion(): string;
 }

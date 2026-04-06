@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { getVersion } from "@ff-labs/fff-node";
+import { FileFinder } from "@ff-labs/fff-node";
 import { ensureFinder, destroyFinder, getFinder, isScanComplete, getDbDir, rescan } from "./finder.js";
 import { grepTool } from "./grep-tool.js";
 import { findTool } from "./find-tool.js";
@@ -39,7 +39,10 @@ export default async function piFff(pi: ExtensionAPI): Promise<void> {
     handler: async (args, ctx) => {
       const finder = getFinder();
       const version = (() => {
-        try { return getVersion(); } catch { return "unknown"; }
+        try {
+          const health = FileFinder.healthCheckStatic();
+          return health.ok ? health.value.version : "unknown";
+        } catch { return "unknown"; }
       })();
 
       const lines = [
