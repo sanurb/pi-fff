@@ -1,37 +1,40 @@
 {
-  "name": "pi-cmux-workflows",
+  "name": "pi-fff",
   "version": "0.1.0",
-  "description": "Opinionated workflow commands for Pi + cmux: continue, review, open project, and handoff in splits",
+  "description": "Pi extension replacing built-in find/grep with FFF — frecency-ranked, git-aware, in-process C FFI search",
   "author": "sanurb",
   "license": "MIT",
   "type": "module",
-  "keywords": ["pi-package", "pi", "pi-coding-agent", "cmux", "workflows"],
+  "keywords": ["pi-package", "pi", "pi-coding-agent", "fff", "search", "grep", "find"],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sanurb/pi-cmux-workflows.git"
+    "url": "git+https://github.com/sanurb/pi-fff.git"
   },
   "files": [
-    "extensions/",
-    "skills/",
-    "prompts/",
+    "src/",
     "README.md"
   ],
   "pi": {
     "extensions": [
-      "./extensions/index.ts"
-    ],
-    "skills": [
-      "./skills"
-    ],
-    "prompts": [
-      "./prompts"
+      "./src/index.ts"
     ]
   },
+  "dependencies": {
+    "@ff-labs/fff-node": "^0.5.1"
+  },
   "peerDependencies": {
-    "@mariozechner/pi-coding-agent": "*"
+    "@mariozechner/pi-agent-core": "*",
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-tui": "*",
+    "@mariozechner/pi-ai": "*",
+    "@sinclair/typebox": "*"
   },
   "devDependencies": {
+    "@mariozechner/pi-agent-core": "*",
     "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-tui": "*",
+    "@mariozechner/pi-ai": "*",
+    "@sinclair/typebox": "*",
     "typescript": "^6.0.2"
   }
 }

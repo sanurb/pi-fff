@@ -1,92 +1,71 @@
-# pi-cmux-workflows — Opinionated workflow commands for Pi + cmux
+# pi-fff — FFF-powered search for Pi
 
-## What this repo is
+## What this is
 
-A compact set of **slash command workflows** that make Pi + cmux dramatically more useful for daily development.
-
-Not a platform. Not an SDK. Not an orchestration framework. Just excellent daily ergonomics.
+A Pi extension that replaces the built-in `find` and `grep` tools with [FFF](https://github.com/dmtrKovalenko/fff.nvim) — a Rust search engine called through the Node SDK (`@ff-labs/fff-node`) via C FFI. Adds `multi_grep` for OR-logic multi-pattern search.
 
 ## Architecture
 
 ```
-extensions/
-  index.ts              ← entrypoint: guards + workflow registration
-  cmux.ts               ← cmux CLI wrapper (exec, identify, split, browser pane)
-  shell.ts              ← shell escaping and Pi command building
-  git.ts                ← minimal git helpers (repo info, status summary)
-  session.ts            ← session context extraction (recent task, name)
-  debug.ts              ← conditional stderr logging
-  workflows/
-    split.ts            ← /split, /splitv, /splith
-    review.ts           ← /review (ringi + cmux browser pane)
-    open-project.ts     ← /open <path-or-zoxide-query>
-    handoff.ts          ← /handoff [note]
-skills/
-  code-review/SKILL.md  ← ringi review workflow, sources, non-negotiables
-  handoff/SKILL.md      ← self-contained handoff prompt generation
-prompts/
-  review.md             ← ringi review workflow prompt
+src/
+├── index.ts                ← Extension entry: lifecycle, tool registration, commands
+├── finder.ts               ← FFF instance management (ensureFinder, destroy, getFinder)
+├── tool-pipeline.ts        ← Shared execute envelope (abort, finder, telemetry, truncation)
+├── grep-tool.ts            ← grep tool: params, execute logic, fallback, enrichment
+├── find-tool.ts            ← find tool: params, execute logic
+├── multi-grep-tool.ts      ← multi_grep tool: params, execute logic
+├── format-grep.ts          ← Grep output formatter (pure function)
+├── format-find.ts          ← Find output formatter (pure function)
+├── fallback.ts             ← Zero-result fallback chain (4 stages, sync)
+├── enrichment.ts           ← Auto-enrichment for small result sets
+├── query-tracker.ts        ← Query→file tracking heuristics
+├── populate-annotations.ts ← Runtime annotation population (bridges SDK → formatters)
+├── telemetry.ts            ← Session counters (in-memory)
+├── annotations.ts          ← Frecency labels, git status, size warnings (pure)
+├── truncation.ts           ← Match-centered line truncation (pure)
+├── cursor-store.ts         ← Pagination cursor management (in-memory)
+├── render.ts               ← TUI renderCall/renderResult (single shared result renderer)
+├── types.ts                ← Shared interfaces (readonly by default)
+└── fff-node.d.ts           ← Type shim for @ff-labs/fff-node SDK
 ```
 
 ## Module boundaries
 
-| Module | Knows about | Does not know about |
-|--------|-------------|-------------------|
-| cmux | cmux CLI | workflows, git, session, ringi |
-| shell | nothing | cmux, git, workflows |
-| git | ExtensionAPI (exec) | cmux, session, workflows |
-| session | SessionManager API | cmux, git, workflows |
-| workflows/* | cmux, shell, git, session | each other |
-| review workflow | cmux, ringi CLI | other workflows |
-| index | all modules (wiring only) | — |
+| Module | Knows about | Pure? |
+|--------|-------------|-------|
+| types | nothing | yes |
+| annotations | types | yes |
+| truncation | nothing | yes |
+| format-grep | types, annotations, truncation | yes |
+| format-find | types, annotations | yes |
+| fallback | FFF SDK, types | no (sync) |
+| enrichment | FFF SDK, types | no |
+| query-tracker | FFF SDK, types | no |
+| populate-annotations | FFF SDK, types (runtime detection) | no |
+| tool-pipeline | finder, telemetry, pi-coding-agent | no |
+| telemetry | types | yes (in-memory state) |
+| cursor-store | types | yes (in-memory state) |
+| render | pi-tui, pi-coding-agent (Theme) | no |
+| finder | FFF SDK (lazy resolution, no TLA) | no |
+| grep-tool | tool-pipeline, formatters, fallback, enrichment | no |
+| find-tool | tool-pipeline, formatters, query-tracker | no |
+| multi-grep-tool | tool-pipeline, formatters, enrichment | no |
+| index | all modules (wiring only) | no |
 
 ## Key patterns
 
-- **Ringi-first review**: ringi owns review state, cmux is the presentation layer, Pi is workflow glue
-- **Guards**: PI_CMUX_CHILD=1 → bail; cmux ping → bail if unavailable
-- **Split readiness**: poll for new surface after `new-split` before sending command
-- **Shell safety**: all values go through `shellEscape()` — no interpolation
-- **Concise handoffs**: bounded file lists, truncated task text, no giant dumps
-- **Degraded modes**: clear errors for missing ringi, no staged changes, failed browser pane
+- **Override built-ins**: grep and find register with the same `name` as Pi's built-ins
+- **Pure formatters**: format-grep, format-find, annotations, truncation have zero FFF SDK imports
+- **Definition gating**: All `isDefinition` features check `"isDefinition" in items[0]` at runtime
+- **Fallback chain**: 4 stages (broaden → fuzzy → filepath → actionable error), stops at first success
+- **Auto-enrichment**: ≤3 files → re-issue grep with wider context (1 file: 15 lines, 2-3: 8 lines)
+- **Frecency thresholds**: ≥100 hot, ≥50 warm, ≥10 frequent, <10 omit
+- **Budget scaling**: ≤3 files → 5000 chars, 4-8 → 3500, ≥9 → 2500
 
-## Slash commands
+## Commands
 
 | Command | Description |
 |---------|-------------|
-| `/split [prompt]` | Open vertical split with Pi |
-| `/splitv [prompt]` | Alias for /split |
-| `/splith [prompt]` | Open horizontal split with Pi |
-| `/review` | Create ringi review for staged changes, open browser pane |
-| `/review --branch <name>` | Review branch divergence |
-| `/review --commits <sha>` | Review specific commits |
-| `/review --pr <url>` | Review a GitHub PR |
-| `/open <path>` | Open Pi in another directory |
-| `/handoff [note]` | Hand off task context to new split |
-
-## Review architecture
-
-```
-User runs /review
-  → Pi checks prerequisites (ringi, git, staged changes)
-  → Pi ensures ringi serve is running (auto-starts if needed)
-  → Pi calls: ringi review create --json
-  → Pi calls: cmux new-pane --type browser --url <ringi-url>
-  → User reviews in ringi web UI (comments, suggestions, todos)
-  → User resolves: ringi review resolve last --yes
-```
-
-Pi does NOT:
-- Perform freeform LLM code review
-- Generate review summaries
-- Track review state
-- Create review findings in chat
-
-## Non-goals
-
-- Generic cmux passthrough
-- Browser automation beyond opening ringi URL
-- Sidebar/status systems
-- Agent orchestration
-- Subagent platforms
-- Session naming or turn summaries
-- Freeform LLM review output
+| `/fff-health` | Show FFF runtime status |
+| `/fff-rescan` | Force filesystem rescan |
+| `/fff-stats` | Session search telemetry |
